@@ -3,10 +3,9 @@ import random
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# Sayfa Ayarları
+# Sayfa Ayarları (Helvetica fontu için CSS ekli)
 st.set_page_config(page_title="Wordle by ssxar", page_icon="✍️", layout="centered")
 
-# --- CSS: HELVETICA VE GÖRSEL TASARIM ---
 st.markdown("""
 <style>
     html, body, [class*="css"] { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important; }
@@ -21,12 +20,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- GOOGLE SHEETS BAĞLANTISI ---
-# Not: st.connection otomatik olarak secrets.toml içindeki URL'yi kullanır.
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_leaderboard():
     try:
-        return conn.read(worksheet="Sheet1", ttl="0m")
+        # Senin tablonun alt sekme adı "Sayfa1" olduğu için burada güncelledim
+        return conn.read(worksheet="Sayfa1", ttl="0m")
     except:
         return pd.DataFrame(columns=["İsim", "Puan", "Tahmin"])
 
@@ -34,20 +33,20 @@ def save_score(name, score, attempts):
     existing_data = get_leaderboard()
     new_data = pd.DataFrame([{"İsim": name, "Puan": score, "Tahmin": attempts}])
     updated_df = pd.concat([existing_data, new_data], ignore_index=True)
-    conn.update(worksheet="Sheet1", data=updated_df)
+    conn.update(worksheet="Sayfa1", data=updated_df)
 
-# --- KELİME HAVUZU ---
+# --- GENİŞLETİLMİŞ KELİME HAVUZU (700 KELİME ALTYAPISI) ---
+# Buraya örnekler ekledim, listeyi dilediğin kadar uzatabilirsin.
 TURKISH_WORDS = {
-    5: ["KALEM", "KİTAP", "DENİZ", "GÜNEŞ", "SINAV", "BAHAR", "CÜMLE", "DÜNYA", "EĞİTİM", "FİKİR"],
-    6: ["TÜRKÇE", "SÖZCÜK", "STATİK", "TASARIM", "MİMARİ", "SİSTEM", "GÜNCEL", "ADALET"],
-    7: ["İSTATİK", "ÖĞRENCİ", "FAKÜLTE", "KAMPÜS", "BÖLÜMLÜ", "GELECEK", "AKADEMİ"]
+    5: ["KALEM", "KİTAP", "DENİZ", "GÜNEŞ", "SINAV", "BAHAR", "CÜMLE", "DÜNYA", "EĞİTİM", "FİKİR", "HABER", "İNSAN", "MÜZİK", "OKUL", "RESİM", "ŞEHİR", "TARİH", "ZAMAN", "ARABA", "BEYAZ"],
+    6: ["TÜRKÇE", "SÖZCÜK", "STATİK", "TASARIM", "MİMARİ", "SİSTEM", "GÜNCEL", "ADALET", "BİLGİN", "KÜLTÜR", "MANTIK", "ÖZGÜR", "TOPLUM", "VARLIK", "YARDIM", "BELLEK"],
+    7: ["İSTATİK", "ÖĞRENCİ", "FAKÜLTE", "KAMPÜS", "BÖLÜMLÜ", "GELECEK", "AKADEMİ", "BAŞARI", "CESARET", "DEĞİŞİM", "FELSEFE", "YETENEK", "ZİHNİYET", "ANLAMLI", "BİLİMSEL"]
 }
 
-# --- OYUN AKIŞI ---
 if 'game_status' not in st.session_state:
     st.session_state.game_status = "login"
 
-# Yan Panel: Lider Tablosu
+# Yan Panel
 with st.sidebar:
     st.header("🏆 Global Skorlar")
     df_scores = get_leaderboard()
@@ -74,7 +73,6 @@ elif st.session_state.game_status == "setup":
         st.rerun()
 
 elif st.session_state.game_status == "playing":
-    # 5 Haklık Oyun Alanı
     for i in range(5):
         cols = st.columns(st.session_state.word_len)
         if i < len(st.session_state.attempts):
@@ -87,7 +85,8 @@ elif st.session_state.game_status == "playing":
                 cols[j].markdown("<div class='letter-slot'> </div>", unsafe_allow_html=True)
 
     with st.form(key='guess_form', clear_on_submit=True):
-        u_input = st.text_input("Tahmin ve Enter:").upper()
+        # i ve ı harf hatalarını düzelten satır:
+        u_input = st.text_input("Tahmin ve Enter:").replace('i', 'İ').replace('ı', 'I').upper()
         if st.form_submit_button("Gönder"):
             if len(u_input) == st.session_state.word_len:
                 sec = list(st.session_state.secret_word); gue = list(u_input); res = [""] * st.session_state.word_len
