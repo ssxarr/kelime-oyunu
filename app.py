@@ -3,10 +3,10 @@ import random
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# Sayfa Ayarları
+# 1. Sayfa Ayarları (En Üstte Olmalı)
 st.set_page_config(page_title="Ateşli Çocuklar Kelime Savaşları", page_icon="🔥", layout="centered")
 
-# --- CSS: HELVETICA VE TASARIM ---
+# --- CSS: TASARIM VE MOBİL UYUM ---
 st.markdown("""
 <style>
     html, body, [class*="css"] { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important; }
@@ -21,26 +21,27 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- GOOGLE SHEETS BAĞLANTISI ---
+# 2. Bağlantıyı Kur
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     try:
-        # Linkindeki sekme adı "Sayfa1" olduğu için onu kullanıyoruz
-        return conn.read(worksheet="Sayfa1", ttl="0m")
+        # worksheet isminin Sayfa1 olduğundan emin ol
+        return conn.read(worksheet="Sayfa1", ttl="0")
     except:
         return pd.DataFrame(columns=["Email", "Isim", "Toplam_Puan", "Oyun_Sayisi"])
 
 def update_db(email, name, points):
     try:
         df = get_data()
+        # Email sütununu kontrol et ve temizle
         df['Email'] = df['Email'].astype(str).str.strip()
+        
         if email in df['Email'].values:
             idx = df[df['Email'] == email].index[0]
-            curr_p = int(df.at[idx, 'Toplam_Puan']) if pd.notnull(df.at[idx, 'Toplam_Puan']) else 0
-            curr_o = int(df.at[idx, 'Oyun_Sayisi']) if pd.notnull(df.at[idx, 'Oyun_Sayisi']) else 0
-            df.at[idx, 'Toplam_Puan'] = curr_p + points
-            df.at[idx, 'Oyun_Sayisi'] = curr_o + 1
+            # Değerleri sayıya çevirip üzerine ekle
+            df.at[idx, 'Toplam_Puan'] = int(df.at[idx, 'Toplam_Puan'] or 0) + points
+            df.at[idx, 'Oyun_Sayisi'] = int(df.at[idx, 'Oyun_Sayisi'] or 0) + 1
         else:
             new_row = pd.DataFrame([{"Email": email, "Isim": name, "Toplam_Puan": points, "Oyun_Sayisi": 1}])
             df = pd.concat([df, new_row], ignore_index=True)
@@ -49,19 +50,9 @@ def update_db(email, name, points):
         conn.update(worksheet="Sayfa1", data=df)
         st.toast("Skor başarıyla kaydedildi! 🏆")
     except Exception as e:
-        st.sidebar.error("Bağlantı Hatası: Lütfen Google Sheets yetkilerini ve Secrets ID'yi kontrol edin.")
+        st.sidebar.error("Kayıt başarısız! Lütfen hizmet hesabının 'Düzenleyici' yetkisini kontrol et.")
 
-# --- YAN PANEL ---
-with st.sidebar:
-    st.title("🏆 Lider Savaşçılar")
-    lb = get_data()
-    if not lb.empty:
-        st.dataframe(lb[["Isim", "Toplam_Puan"]].sort_values(by="Toplam_Puan", ascending=False).head(10), hide_index=True)
-    st.markdown("---")
-    st.subheader("🎯 Ödül Puanları")
-    st.write("1. 100p | 2. 80p | 3. 60p | 4. 40p | 5. 20p | 6. 15p | 7. 10p")
-
-# --- KELİME HAVUZU ---
+# 3. Oyun Verileri ve Havuzu
 WORDS = {
     5: ["KALEM", "KİTAP", "DENİZ", "GÜNEŞ", "SINAV", "BAHAR", "CÜMLE", "DÜNYA", "EĞİTİM", "FİKİR"],
     6: ["TÜRKÇE", "SÖZCÜK", "STATİK", "TASARIM", "MİMARİ", "SİSTEM", "GÜNCEL", "ADALET"],
@@ -71,10 +62,21 @@ WORDS = {
 if 'game_status' not in st.session_state:
     st.session_state.game_status = "login"
 
+# --- YAN PANEL (LİDER TABLOSU) ---
+with st.sidebar:
+    st.title("🏆 Lider Savaşçılar")
+    lb = get_data()
+    if not lb.empty:
+        st.dataframe(lb[["Isim", "Toplam_Puan"]].sort_values(by="Toplam_Puan", ascending=False).head(10), hide_index=True)
+    st.markdown("---")
+    st.subheader("🎯 Ödül Puanları")
+    st.write("1. 100p | 2. 80p | 3. 60p | 4. 40p | 5. 20p | 6. 15p | 7. 10p")
+
 st.title("🔥 Ateşli Çocuklar Kelime Savaşları")
 
+# 4. Oyun Akışı
 if st.session_state.game_status == "login":
-    u_email = st.text_input("E-mail (Puan Takibi):").strip()
+    u_email = st.text_input("E-mail (Puan Takibi İçin):").strip()
     u_name = st.text_input("Görünecek Adınız:").strip()
     if st.button("Savaşa Başla") and u_email and u_name:
         st.session_state.email = u_email
@@ -84,8 +86,8 @@ if st.session_state.game_status == "login":
 
 elif st.session_state.game_status == "setup":
     st.subheader(f"Savaşçı: {st.session_state.username}")
-    choice = st.radio("Harf Sayısı:", [5, 6, 7], horizontal=True)
-    if st.button("Kelimemi Seç"):
+    choice = st.radio("Harf Sayısı Seçin:", [5, 6, 7], horizontal=True)
+    if st.button("Kelimeyi Getir"):
         st.session_state.word_len = choice
         st.session_state.secret = random.choice(WORDS[choice]).upper()
         st.session_state.tries = []
@@ -129,7 +131,7 @@ if st.session_state.game_status == "won":
     st.balloons(); st.success(f"Zafer senin! Kelime: {st.session_state.secret}")
     if st.button("Yeni Savaş"): st.session_state.game_status = "setup"; st.rerun()
 elif st.session_state.game_status == "lost":
-    st.error(f"Pes etme! Doğru kelime: {st.session_state.secret}")
+    st.error(f"Maalesef elendin! Doğru kelime: {st.session_state.secret}")
     if st.button("Tekrar Dene"): st.session_state.game_status = "setup"; st.rerun()
 
 st.markdown("---")
