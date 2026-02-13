@@ -37,8 +37,7 @@ def get_data():
 def update_db(email, name, points):
     try:
         df = get_data()
-        df['Email'] = df['Email'].astype(str).str.strip()
-        
+        # Veriyi hazırla
         if email in df['Email'].values:
             idx = df[df['Email'] == email].index[0]
             df.at[idx, 'Toplam_Puan'] = int(df.at[idx, 'Toplam_Puan'] or 0) + points
@@ -47,13 +46,12 @@ def update_db(email, name, points):
             new_row = pd.DataFrame([{"Email": email, "Isim": name, "Toplam_Puan": points, "Oyun_Sayisi": 1}])
             df = pd.concat([df, new_row], ignore_index=True)
         
-        # TABLOYU GÜNCELLE (Zorlayıcı Mod)
+        # VERİ YAZMAYI ZORLA
         conn.update(worksheet="Sayfa1", data=df)
-        st.toast("Skor başarıyla kaydedildi! 🏆")
+        st.toast("Skor başarıyla işlendi! 🏆")
     except Exception as e:
-        # Hatanın gerçek sebebini buraya yazdırıyoruz:
-        st.error(f"Teknik Hata: {e}")
-        st.sidebar.warning("Hata Detayı: Google Sheets yetki hatası alınıyor.")
+        # Hata pembe kutu yerine sidebar'da küçük bir uyarı olarak çıksın
+        st.sidebar.error(f"Bağlantı Pürüzü: {e}")
 # 3. Oyun Verileri ve Havuzu
 WORDS = {
     5: ["KALEM", "KİTAP", "DENİZ", "GÜNEŞ", "SINAV", "BAHAR", "CÜMLE", "DÜNYA", "EĞİTİM", "FİKİR"],
