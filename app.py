@@ -6,7 +6,7 @@ from streamlit_gsheets import GSheetsConnection
 # Sayfa Ayarları
 st.set_page_config(page_title="Ateşli Çocuklar Kelime Savaşları", page_icon="🔥", layout="centered")
 
-# --- CSS ---
+# --- CSS: HELVETICA VE MOBİL UYUM ---
 st.markdown("""
 <style>
     html, body, [class*="css"] { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important; }
@@ -26,7 +26,6 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     try:
-        # worksheet parametresini "Sayfa1" olarak kontrol et
         return conn.read(worksheet="Sayfa1", ttl="0m")
     except:
         return pd.DataFrame(columns=["Email", "Isim", "Toplam_Puan", "Oyun_Sayisi"])
@@ -45,9 +44,22 @@ def update_db(email, name, points):
         
         # VERİ YAZMA İŞLEMİ
         conn.update(worksheet="Sayfa1", data=df)
-        st.toast("Skor başarıyla kaydedildi! 🏆")
+        st.toast("Skor başarıyla güncellendi! 🏆")
     except Exception as e:
-        st.error(f"Skor kaydedilemedi. Lütfen Google Sheets yetkilerini kontrol edin.")
+        st.sidebar.error("Veri tabanına yazılamadı. Yetki sorunu olabilir.")
+
+# --- YAN PANEL (Sidebar - Hata alsa bile görünmesi için en üstte) ---
+with st.sidebar:
+    st.title("🏆 Lider Savaşçılar")
+    leaderboard = get_data()
+    if not leaderboard.empty:
+        st.dataframe(leaderboard[["Isim", "Toplam_Puan"]].sort_values(by="Toplam_Puan", ascending=False).head(10), hide_index=True)
+    
+    st.markdown("---")
+    st.subheader("🎯 Ödül Puanları")
+    st.write("1. Tahmin: 100p | 2. Tahmin: 80p")
+    st.write("3. Tahmin: 60p | 4. Tahmin: 40p")
+    st.write("5. Tahmin: 20p | 6. Tahmin: 15p | 7. Tahmin: 10p")
 
 # --- KELİME HAVUZU ---
 WORDS = {
@@ -59,15 +71,11 @@ WORDS = {
 if 'game_status' not in st.session_state:
     st.session_state.game_status = "login"
 
-with st.sidebar:
-    st.title("🏆 Liderler")
-    leaderboard = get_data()
-    if not leaderboard.empty:
-        st.dataframe(leaderboard[["Isim", "Toplam_Puan"]].sort_values(by="Toplam_Puan", ascending=False).head(10), hide_index=True)
-
 st.title("🔥 Ateşli Çocuklar Kelime Savaşları")
 
+# Giriş ve Oyun Mantığı
 if st.session_state.game_status == "login":
+    st.info("Puanlarınızın kaydedilmesi için giriş yapın.")
     u_email = st.text_input("E-mail:").strip()
     u_name = st.text_input("İsim:").strip()
     if st.button("Savaşa Başla") and u_email and u_name:
@@ -77,7 +85,7 @@ if st.session_state.game_status == "login":
         st.rerun()
 
 elif st.session_state.game_status == "setup":
-    choice = st.radio("Harf Sayısı:", [5, 6, 7], horizontal=True)
+    choice = st.radio("Harf Sayısı Seçin:", [5, 6, 7], horizontal=True)
     if st.button("Saldır"):
         st.session_state.word_len = choice
         st.session_state.secret = random.choice(WORDS[choice]).upper()
@@ -104,9 +112,9 @@ elif st.session_state.game_status == "playing":
             if len(guess_in) == st.session_state.word_len:
                 sol = list(st.session_state.secret); gue = list(guess_in); res = [""] * st.session_state.word_len
                 for k in range(st.session_state.word_len):
-                    if gue[k] == sol[k]: res[k] = "correct-pos"; sol[k] = None; gue[k] = "X"
+                    if gue[k] == sol[k]: res[k] = "correct-pos"; sol[k] = None; gue[k] = "DONE"
                 for k in range(st.session_state.word_len):
-                    if gue[k] != "X" and gue[k] in sol: res[k] = "wrong-pos"; sol[sol.index(gue[k])] = None
+                    if gue[k] != "DONE" and gue[k] in sol: res[k] = "wrong-pos"; sol[sol.index(gue[k])] = None
                 
                 st.session_state.tries.append((guess_in, res))
                 
@@ -120,9 +128,11 @@ elif st.session_state.game_status == "playing":
                 st.rerun()
 
 if st.session_state.game_status == "won":
-    st.balloons()
-    st.success(f"Kazandın! Kelime: {st.session_state.secret}")
-    if st.button("Tekrar"): st.session_state.game_status = "setup"; st.rerun()
+    st.balloons(); st.success(f"Zafer! Kelime: {st.session_state.secret}")
+    if st.button("Yeni Oyun"): st.session_state.game_status = "setup"; st.rerun()
 elif st.session_state.game_status == "lost":
-    st.error(f"Bilemedin! Kelime: {st.session_state.secret}")
-    if st.button("Tekrar"): st.session_state.game_status = "setup"; st.rerun()
+    st.error(f"Maalesef! Doğru: {st.session_state.secret}")
+    if st.button("Tekrar Dene"): st.session_state.game_status = "setup"; st.rerun()
+
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: grey;'>made by ssxar</p>", unsafe_allow_html=True)
