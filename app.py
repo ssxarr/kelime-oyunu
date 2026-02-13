@@ -26,11 +26,14 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     try:
-        # worksheet isminin Sayfa1 olduğundan emin ol
-        return conn.read(worksheet="Sayfa1", ttl="0")
-    except:
+        # ttl="0" ile her seferinde sıfırdan okumasını sağlıyoruz
+        data = conn.read(worksheet="Sayfa1", ttl="0")
+        if data is None or data.empty:
+            return pd.DataFrame(columns=["Email", "Isim", "Toplam_Puan", "Oyun_Sayisi"])
+        return data
+    except Exception:
+        # Hata durumunda boş tablo döndür ki oyun çökmesin
         return pd.DataFrame(columns=["Email", "Isim", "Toplam_Puan", "Oyun_Sayisi"])
-
 def update_db(email, name, points):
     try:
         df = get_data()
