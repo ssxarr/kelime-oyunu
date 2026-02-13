@@ -37,24 +37,23 @@ def get_data():
 def update_db(email, name, points):
     try:
         df = get_data()
-        # Email sütununu kontrol et ve temizle
         df['Email'] = df['Email'].astype(str).str.strip()
         
         if email in df['Email'].values:
             idx = df[df['Email'] == email].index[0]
-            # Değerleri sayıya çevirip üzerine ekle
             df.at[idx, 'Toplam_Puan'] = int(df.at[idx, 'Toplam_Puan'] or 0) + points
             df.at[idx, 'Oyun_Sayisi'] = int(df.at[idx, 'Oyun_Sayisi'] or 0) + 1
         else:
             new_row = pd.DataFrame([{"Email": email, "Isim": name, "Toplam_Puan": points, "Oyun_Sayisi": 1}])
             df = pd.concat([df, new_row], ignore_index=True)
         
-        # TABLOYU GÜNCELLE
+        # TABLOYU GÜNCELLE (Zorlayıcı Mod)
         conn.update(worksheet="Sayfa1", data=df)
         st.toast("Skor başarıyla kaydedildi! 🏆")
     except Exception as e:
-        st.sidebar.error("Kayıt başarısız! Lütfen hizmet hesabının 'Düzenleyici' yetkisini kontrol et.")
-
+        # Hatanın gerçek sebebini buraya yazdırıyoruz:
+        st.error(f"Teknik Hata: {e}")
+        st.sidebar.warning("Hata Detayı: Google Sheets yetki hatası alınıyor.")
 # 3. Oyun Verileri ve Havuzu
 WORDS = {
     5: ["KALEM", "KİTAP", "DENİZ", "GÜNEŞ", "SINAV", "BAHAR", "CÜMLE", "DÜNYA", "EĞİTİM", "FİKİR"],
