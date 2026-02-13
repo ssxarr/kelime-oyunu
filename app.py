@@ -6,7 +6,7 @@ from streamlit_gsheets import GSheetsConnection
 # Sayfa Ayarları
 st.set_page_config(page_title="Ateşli Çocuklar Kelime Savaşları", page_icon="🔥", layout="centered")
 
-# --- CSS: HELVETICA VE MOBİL UYUM ---
+# --- CSS: HELVETICA ---
 st.markdown("""
 <style>
     html, body, [class*="css"] { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important; }
@@ -37,20 +37,20 @@ def update_db(email, name, points):
         df['Email'] = df['Email'].astype(str).str.strip()
         if email in df['Email'].values:
             idx = df[df['Email'] == email].index[0]
-            df.at[idx, 'Toplam_Puan'] = int(df.at[idx, 'Toplam_Puan']) + points
-            df.at[idx, 'Oyun_Sayisi'] = int(df.at[idx, 'Oyun_Sayisi']) + 1
+            # Değerleri sayıya çevirerek hata riskini azaltıyoruz
+            df.at[idx, 'Toplam_Puan'] = int(df.at[idx, 'Toplam_Puan'] or 0) + points
+            df.at[idx, 'Oyun_Sayisi'] = int(df.at[idx, 'Oyun_Sayisi'] or 0) + 1
         else:
             new_data = pd.DataFrame([{"Email": email, "Isim": name, "Toplam_Puan": points, "Oyun_Sayisi": 1}])
             df = pd.concat([df, new_data], ignore_index=True)
         
-        # VERİ YAZMA İŞLEMİ
+        # VERİ YAZMA
         conn.update(worksheet="Sayfa1", data=df)
-        st.toast("Skor kaydedildi! 🏆")
-    except Exception:
-        # Hata olsa bile oyunun çökmesini engelliyoruz
-        st.sidebar.warning("Veri kaydedilemedi. Google Sheets yetkilerini kontrol et.")
+    except Exception as e:
+        # Hata mesajını pembe kutu yerine sidebar'da küçük bir uyarı olarak gösterir
+        st.sidebar.warning(f"Bağlantı pürüzü: Veri kaydedilemedi ama oyuna devam edebilirsin!")
 
-# --- YAN PANEL (SIDEBAR) ---
+# --- YAN PANEL ---
 with st.sidebar:
     st.title("🏆 Lider Savaşçılar")
     leaderboard = get_data()
@@ -59,11 +59,9 @@ with st.sidebar:
     
     st.markdown("---")
     st.subheader("🎯 Ödül Puanları")
-    st.write("1. Tahmin: 100p | 2. Tahmin: 80p")
-    st.write("3. Tahmin: 60p | 4. Tahmin: 40p")
-    st.write("5. Tahmin: 20p | 6. Tahmin: 15p | 7. Tahmin: 10p")
+    st.write("1. 100p | 2. 80p | 3. 60p | 4. 40p | 5. 20p | 6. 15p | 7. 10p")
 
-# --- KELİME HAVUZU ---
+# --- KELİME HAVUZU (Buraya örnek kelimeler ekledim) ---
 WORDS = {
     5: ["KALEM", "KİTAP", "DENİZ", "GÜNEŞ", "SINAV", "BAHAR", "CÜMLE", "DÜNYA", "EĞİTİM", "FİKİR"],
     6: ["TÜRKÇE", "SÖZCÜK", "STATİK", "TASARIM", "MİMARİ", "SİSTEM", "GÜNCEL", "ADALET"],
@@ -122,7 +120,6 @@ elif st.session_state.game_status == "playing":
                     update_db(st.session_state.email, st.session_state.username, pts)
                     st.session_state.game_status = "won"
                 elif len(st.session_state.tries) >= 7:
-                    # Bilemediğinde de 0 puanla tabloya ekler
                     update_db(st.session_state.email, st.session_state.username, 0)
                     st.session_state.game_status = "lost"
                 st.rerun()
@@ -131,7 +128,7 @@ if st.session_state.game_status == "won":
     st.balloons(); st.success(f"Zafer! Kelime: {st.session_state.secret}")
     if st.button("Yeni Savaş"): st.session_state.game_status = "setup"; st.rerun()
 elif st.session_state.game_status == "lost":
-    st.error(f"Maalesef elendin! Doğru kelime: {st.session_state.secret}")
+    st.error(f"Maalesef! Doğru: {st.session_state.secret}")
     if st.button("Tekrar Dene"): st.session_state.game_status = "setup"; st.rerun()
 
 st.markdown("---")
