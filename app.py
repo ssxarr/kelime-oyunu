@@ -37,20 +37,16 @@ def get_data():
 def update_db(email, name, points):
     try:
         df = get_data()
-        # Veriyi hazırla
-        if email in df['Email'].values:
-            idx = df[df['Email'] == email].index[0]
-            df.at[idx, 'Toplam_Puan'] = int(df.at[idx, 'Toplam_Puan'] or 0) + points
-            df.at[idx, 'Oyun_Sayisi'] = int(df.at[idx, 'Oyun_Sayisi'] or 0) + 1
-        else:
-            new_row = pd.DataFrame([{"Email": email, "Isim": name, "Toplam_Puan": points, "Oyun_Sayisi": 1}])
-            df = pd.concat([df, new_row], ignore_index=True)
+        # Veriyi güncelleme mantığın doğru...
+        # ... (senin kodun) ...
         
-        # VERİ YAZMAYI ZORLA
+        # VERİ YAZMA
         conn.update(worksheet="Sayfa1", data=df)
+        
+        # ÖNEMLİ: Cache'i temizle ki lider tablosu anında güncellensin
+        st.cache_data.clear() 
         st.toast("Skor başarıyla işlendi! 🏆")
     except Exception as e:
-        # Hata pembe kutu yerine sidebar'da küçük bir uyarı olarak çıksın
         st.sidebar.error(f"Bağlantı Pürüzü: {e}")
 # 3. Oyun Verileri ve Havuzu
 WORDS = {
