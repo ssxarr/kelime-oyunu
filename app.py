@@ -1,7 +1,6 @@
 import streamlit as st
 import random
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
 
 # 1. Sayfa Ayarları (En Üstte Olmalı)
 st.set_page_config(page_title="Ateşli Çocuklar Kelime Savaşları", page_icon="🔥", layout="centered")
@@ -21,34 +20,41 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 2. Bağlantıyı Kur
-conn = st.connection("gsheets", type=GSheetsConnection)
+# 2. SQL Bağlantısını Kur
+# Bu bağlantı için Streamlit Secrets'ta [connections.postgresql] ayarları yapılmalıdır.
+conn = st.connection("postgresql", type="sql")
 
-def get_data():
+def get_leaderboard():
     try:
-        # ttl="0" ile her seferinde sıfırdan okumasını sağlıyoruz
-        data = conn.read(worksheet="Sayfa1", ttl="0")
-        if data is None or data.empty:
-            return pd.DataFrame(columns=["Email", "Isim", "Toplam_Puan", "Oyun_Sayisi"])
-        return data
+        # Lider tablosunu SQL'den çekiyoruz
+        df = conn.query("SELECT isim, toplam_puan FROM leader_table ORDER BY toplam_puan DESC LIMIT 10", ttl=0)
+        return df
     except Exception:
-        # Hata durumunda boş tablo döndür ki oyun çökmesin
-        return pd.DataFrame(columns=["Email", "Isim", "Toplam_Puan", "Oyun_Sayisi"])
+        return pd.DataFrame(columns=["isim", "toplam_puan"])
+
 def update_db(email, name, points):
     try:
-        df = get_data()
-        # Veriyi güncelleme mantığın doğru...
-        # ... (senin kodun) ...
-        
-        # VERİ YAZMA
-        conn.update(worksheet="Sayfa1", data=df)
-        
-        # ÖNEMLİ: Cache'i temizle ki lider tablosu anında güncellensin
-        st.cache_data.clear() 
+        with conn.session as s:
+            # Önce bu email var mı kontrol et
+            exists = s.execute("SELECT email FROM leader_table WHERE email = :e", {"e": email}).fetchone()
+            
+            if exists:
+                s.execute(
+                    "UPDATE leader_table SET toplam_puan = toplam_puan + :p, oyun_sayisi = oyun_sayisi + 1 WHERE email = :e",
+                    {"p": points, "e": email}
+                )
+            else:
+                s.execute(
+                    "INSERT INTO leader_table (email, isim, toplam_puan, oyun_sayisi) VALUES (:e, :n, :p, 1)",
+                    {"e": email, "n": name, "p": points}
+                )
+            s.commit()
+        st.cache_data.clear() # Cache'i temizle ki tablo anında güncellensin
         st.toast("Skor başarıyla işlendi! 🏆")
     except Exception as e:
-        st.sidebar.error(f"Bağlantı Pürüzü: {e}")
-# 3. Oyun Verileri ve Havuzu
+        st.sidebar.error(f"Veri Tabanı Hatası: {e}")
+
+# 3. Oyun Verileri
 WORDS = {
     5: ["KALEM", "KİTAP", "DENİZ", "GÜNEŞ", "SINAV", "BAHAR", "CÜMLE", "DÜNYA", "EĞİTİM", "FİKİR"],
     6: ["TÜRKÇE", "SÖZCÜK", "STATİK", "TASARIM", "MİMARİ", "SİSTEM", "GÜNCEL", "ADALET"],
@@ -61,9 +67,9 @@ if 'game_status' not in st.session_state:
 # --- YAN PANEL (LİDER TABLOSU) ---
 with st.sidebar:
     st.title("🏆 Lider Savaşçılar")
-    lb = get_data()
+    lb = get_leaderboard()
     if not lb.empty:
-        st.dataframe(lb[["Isim", "Toplam_Puan"]].sort_values(by="Toplam_Puan", ascending=False).head(10), hide_index=True)
+        st.dataframe(lb, hide_index=True)
     st.markdown("---")
     st.subheader("🎯 Ödül Puanları")
     st.write("1. 100p | 2. 80p | 3. 60p | 4. 40p | 5. 20p | 6. 15p | 7. 10p")
@@ -91,6 +97,7 @@ elif st.session_state.game_status == "setup":
         st.rerun()
 
 elif st.session_state.game_status == "playing":
+    # Kelime Kutucuklarını Çiz
     for i in range(7):
         row_html = "<div class='word-row'>"
         if i < len(st.session_state.tries):
@@ -107,8 +114,10 @@ elif st.session_state.game_status == "playing":
         if st.form_submit_button("Saldır!"):
             if len(guess_in) == st.session_state.word_len:
                 sol = list(st.session_state.secret); gue = list(guess_in); res = [""] * st.session_state.word_len
+                # Doğru yer kontrolü
                 for k in range(st.session_state.word_len):
                     if gue[k] == sol[k]: res[k] = "correct-pos"; sol[k] = None; gue[k] = "X"
+                # Yanlış yer kontrolü
                 for k in range(st.session_state.word_len):
                     if gue[k] != "X" and gue[k] in sol: res[k] = "wrong-pos"; sol[sol.index(gue[k])] = None
                 
