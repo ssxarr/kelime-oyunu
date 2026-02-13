@@ -26,6 +26,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
     try:
+        # worksheet parametresini "Sayfa1" olarak kontrol ediyoruz
         return conn.read(worksheet="Sayfa1", ttl="0m")
     except:
         return pd.DataFrame(columns=["Email", "Isim", "Toplam_Puan", "Oyun_Sayisi"])
@@ -44,11 +45,12 @@ def update_db(email, name, points):
         
         # VERİ YAZMA İŞLEMİ
         conn.update(worksheet="Sayfa1", data=df)
-        st.toast("Skor başarıyla güncellendi! 🏆")
-    except Exception as e:
-        st.sidebar.error("Veri tabanına yazılamadı. Yetki sorunu olabilir.")
+        st.toast("Skor kaydedildi! 🏆")
+    except Exception:
+        # Hata olsa bile oyunun çökmesini engelliyoruz
+        st.sidebar.warning("Veri kaydedilemedi. Google Sheets yetkilerini kontrol et.")
 
-# --- YAN PANEL (Sidebar - Hata alsa bile görünmesi için en üstte) ---
+# --- YAN PANEL (SIDEBAR) ---
 with st.sidebar:
     st.title("🏆 Lider Savaşçılar")
     leaderboard = get_data()
@@ -73,11 +75,9 @@ if 'game_status' not in st.session_state:
 
 st.title("🔥 Ateşli Çocuklar Kelime Savaşları")
 
-# Giriş ve Oyun Mantığı
 if st.session_state.game_status == "login":
-    st.info("Puanlarınızın kaydedilmesi için giriş yapın.")
-    u_email = st.text_input("E-mail:").strip()
-    u_name = st.text_input("İsim:").strip()
+    u_email = st.text_input("E-mail (Puan için):").strip()
+    u_name = st.text_input("Görünecek Adınız:").strip()
     if st.button("Savaşa Başla") and u_email and u_name:
         st.session_state.email = u_email
         st.session_state.username = u_name
@@ -85,8 +85,8 @@ if st.session_state.game_status == "login":
         st.rerun()
 
 elif st.session_state.game_status == "setup":
-    choice = st.radio("Harf Sayısı Seçin:", [5, 6, 7], horizontal=True)
-    if st.button("Saldır"):
+    choice = st.radio("Harf Sayısı:", [5, 6, 7], horizontal=True)
+    if st.button("Kelimemi Seç"):
         st.session_state.word_len = choice
         st.session_state.secret = random.choice(WORDS[choice]).upper()
         st.session_state.tries = []
@@ -101,8 +101,7 @@ elif st.session_state.game_status == "playing":
             for j in range(st.session_state.word_len):
                 row_html += f"<div class='letter-slot {colors[j]}'>{guess[j]}</div>"
         else:
-            for j in range(st.session_state.word_len):
-                row_html += "<div class='letter-slot'> </div>"
+            for j in range(st.session_state.word_len): row_html += "<div class='letter-slot'> </div>"
         row_html += "</div>"
         st.markdown(row_html, unsafe_allow_html=True)
 
@@ -112,9 +111,9 @@ elif st.session_state.game_status == "playing":
             if len(guess_in) == st.session_state.word_len:
                 sol = list(st.session_state.secret); gue = list(guess_in); res = [""] * st.session_state.word_len
                 for k in range(st.session_state.word_len):
-                    if gue[k] == sol[k]: res[k] = "correct-pos"; sol[k] = None; gue[k] = "DONE"
+                    if gue[k] == sol[k]: res[k] = "correct-pos"; sol[k] = None; gue[k] = "X"
                 for k in range(st.session_state.word_len):
-                    if gue[k] != "DONE" and gue[k] in sol: res[k] = "wrong-pos"; sol[sol.index(gue[k])] = None
+                    if gue[k] != "X" and gue[k] in sol: res[k] = "wrong-pos"; sol[sol.index(gue[k])] = None
                 
                 st.session_state.tries.append((guess_in, res))
                 
@@ -123,15 +122,16 @@ elif st.session_state.game_status == "playing":
                     update_db(st.session_state.email, st.session_state.username, pts)
                     st.session_state.game_status = "won"
                 elif len(st.session_state.tries) >= 7:
+                    # Bilemediğinde de 0 puanla tabloya ekler
                     update_db(st.session_state.email, st.session_state.username, 0)
                     st.session_state.game_status = "lost"
                 st.rerun()
 
 if st.session_state.game_status == "won":
     st.balloons(); st.success(f"Zafer! Kelime: {st.session_state.secret}")
-    if st.button("Yeni Oyun"): st.session_state.game_status = "setup"; st.rerun()
+    if st.button("Yeni Savaş"): st.session_state.game_status = "setup"; st.rerun()
 elif st.session_state.game_status == "lost":
-    st.error(f"Maalesef! Doğru: {st.session_state.secret}")
+    st.error(f"Maalesef elendin! Doğru kelime: {st.session_state.secret}")
     if st.button("Tekrar Dene"): st.session_state.game_status = "setup"; st.rerun()
 
 st.markdown("---")
